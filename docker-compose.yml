@@ -1,0 +1,88 @@
+version: '3.9'
+
+services:
+  mifos-db-server:
+    image: postgres:14.1-alpine
+    restart: always
+    ports:
+      - ${DB_PORT}:5432
+    volumes:
+      - "./data/db:/var/lib/postgresql/data"
+      - "./scripts/initdb:/docker-entrypoint-initdb.d/"
+    environment:
+      - POSTGRES_USER=${DB_USER}
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER}"]
+      interval: 5s
+      timeout: 10s
+      retries: 10
+
+  mifos-back-server:
+    image: fintecheando/fineract:${FINERACT_VERSION}
+    restart: always
+    ports:
+      - ${FINERACT_PORT}:8443
+    depends_on:
+      mifos-db-server:
+        condition: service_healthy
+    environment:
+      - FINERACT_HIKARI_DRIVER_SOURCE_CLASS_NAME=${FINERACT_HIKARI_DRIVER_SOURCE_CLASS_NAME}
+      - FINERACT_HIKARI_JDBC_URL=${FINERACT_HIKARI_JDBC_URL}
+      - FINERACT_HIKARI_USERNAME=${DB_USER}
+      - FINERACT_HIKARI_PASSWORD=${DB_PASSWORD}
+      - FINERACT_HIKARI_MINIMUM_IDLE=3
+      - FINERACT_HIKARI_MAXIMUM_POOL_SIZE=10
+      - FINERACT_HIKARI_IDLE_TIMEOUT=60000
+      - FINERACT_HIKARI_CONNECTION_TIMEOUT=20000
+      - FINERACT_HIKARI_TEST_QUERY=SELECT 1
+      - FINERACT_HIKARI_AUTO_COMMIT=true
+      - FINERACT_HIKARI_DS_PROPERTIES_CACHE_PREP_STMTS=true
+      - FINERACT_HIKARI_DS_PROPERTIES_PREP_STMT_CACHE_SIZE=250
+      - FINERACT_HIKARI_DS_PROPERTIES_PREP_STMT_CACHE_SQL_LIMIT=2048
+      - FINERACT_HIKARI_DS_PROPERTIES_USE_SERVER_PREP_STMTS=true
+      - FINERACT_HIKARI_DS_PROPERTIES_USE_LOCAL_SESSION_STATE=true
+      - FINERACT_HIKARI_DS_PROPERTIES_REWRITE_BATCHED_STATEMENTS=true
+      - FINERACT_HIKARI_DS_PROPERTIES_CACHE_RESULT_SET_METADATA=true
+      - FINERACT_HIKARI_DS_PROPERTIES_CACHE_SERVER_CONFIGURATION=true
+      - FINERACT_HIKARI_DS_PROPERTIES_ELIDE_SET_AUTO_COMMITS=true
+      - FINERACT_HIKARI_DS_PROPERTIES_MAINTAIN_TIME_STATS=false
+      - FINERACT_HIKARI_DS_PROPERTIES_LOG_SLOW_QUERIES=true
+      - FINERACT_HIKARI_DS_PROPERTIES_DUMP_QUERIES_IN_EXCEPTION=true
+      - FINERACT_DEFAULT_TENANTDB_HOSTNAME=${FINERACT_DEFAULT_TENANTDB_HOSTNAME}
+      - FINERACT_DEFAULT_TENANTDB_PORT=${DB_PORT}
+      - FINERACT_DEFAULT_TENANTDB_UID=${DB_USER}
+      - FINERACT_DEFAULT_TENANTDB_PWD=${DB_PASSWORD}
+      - FINERACT_DEFAULT_TENANTDB_CONN_PARAMS=${FINERACT_DEFAULT_TENANTDB_CONN_PARAMS}
+      - FINERACT_DEFAULT_TENANTDB_TIMEZONE=${TIMEZONE}
+      - FINERACT_DEFAULT_TENANTDB_IDENTIFIER=${FINERACT_DEFAULT_TENANTDB_IDENTIFIER}
+      - FINERACT_DEFAULT_TENANTDB_NAME=fineract_default
+      - FINERACT_DEFAULT_TENANTDB_DESCRIPTION=${FINERACT_DEFAULT_TENANTDB_DESCRIPTION}
+      - JAVA_TOOL_OPTIONS=${JAVA_TOOL_OPTIONS}
+    healthcheck:
+      test: curl -kfsS https://127.0.0.1:${FINERACT_PORT}/fineract-provider/actuator/health | grep 'readiness' | wc -l
+      timeout: 10s
+      retries: 10
+
+  mifos-front-server:
+    image: fintecheando/web-app:${MIFOS_VERSION}
+    restart: always
+    mem_limit: 256m
+    ports:
+      - 80:80
+    depends_on:
+      mifos-back-server:
+        condition: service_healthy
+    environment:
+      - FINERACT_API_URLS=https://localhost:${FINERACT_PORT}
+      - FINERACT_API_URL=https://localhost:${FINERACT_PORT}
+      - FINERACT_API_PROVIDER=/fineract-provider/api
+      - FINERACT_API_VERSION=/v1
+      - FINERACT_PLATFORM_TENANT_IDENTIFIER=default
+      - MIFOS_DEFAULT_LANGUAGE=en-US
+      - MIFOS_SUPPORTED_LANGUAGES=en-US
+    healthcheck:
+      test: curl -kfsS http://127.0.0.1:80/!#/ | grep 'RELEASE' | wc -l
+      interval: 50s
+      retries: 20
+
