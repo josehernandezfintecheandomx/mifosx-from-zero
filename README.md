@@ -13,7 +13,7 @@
 
 2. Clone the project locally into your system.
 ```
-git clone git@github.com:josehernandezfintecheandomx/mifosx-from-zero.git
+git clone https://github.com/josehernandezfintecheandomx/mifosx-from-zero.git
 ```
 
 3. `cd` into project root directory and make sure you are on the master branch.
